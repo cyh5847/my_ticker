@@ -5,47 +5,48 @@
 // GET  /api/watchlist        -> 현재 목록 조회 (누구나 가능)
 // POST /api/watchlist        -> 목록 갱신 (관리자 비밀번호 필요)
 //      body: { password: string, list: [{market, ticker}, ...] }
+//      또는   { password: string, action: 'verify' } -> 비밀번호만 확인
 
 const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
 const STORAGE_KEY = 'watchlist:shared';
 
-async function kvGet(key) {
-  const res = await fetch(`${KV_URL}/get/${key}`, {
-    headers: { Authorization: `Bearer ${KV_TOKEN}` }
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error('KV get 실패: ' + text);
-  }
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error('KV get 응답 파싱 실패: ' + text);
-  }
-  if (data.result == null) return null;
-  try {
-    return JSON.parse(data.result);
-  } catch {
-    // 저장된 값이 JSON이 아닌 과거 데이터일 경우 빈 배열로 취급
-    return null;
-  }
-}
-
-async function kvSet(key, value) {
-  const res = await fetch(`${KV_URL}/set/${key}`, {
+// Upstash 명령어 배열 방식: POST {KV_URL} body: ["SET", key, value]
+// 이 방식은 값에 특수문자(쉼표, 슬래시 등)가 있어도 URL 인코딩 문제가 없어 안전하다.
+async function redisCommand(commandArray) {
+  const res = await fetch(KV_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${KV_TOKEN}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(JSON.stringify(value))
+    body: JSON.stringify(commandArray)
   });
   const text = await res.text();
-  if (!res.ok) {
-    throw new Error('KV set 실패: ' + text);
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('Redis 응답 파싱 실패: ' + text);
   }
+  if (!res.ok || data.error) {
+    throw new Error('Redis 명령 실패: ' + (data.error || text));
+  }
+  return data.result;
+}
+
+async function kvGet(key) {
+  const result = await redisCommand(['GET', key]);
+  if (result == null) return null;
+  try {
+    return JSON.parse(result);
+  } catch {
+    return null;
+  }
+}
+
+async function kvSet(key, value) {
+  await redisCommand(['SET', key, JSON.stringify(value)]);
   return true;
 }
 
@@ -60,7 +61,6 @@ function parseRequestBody(req) {
       return {};
     }
   }
-  // Buffer로 들어오는 경우
   if (Buffer.isBuffer(body)) {
     try {
       return JSON.parse(body.toString('utf-8'));
@@ -98,7 +98,6 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: '비밀번호가 올바르지 않습니다.' });
     }
 
-    // action: 'verify' -> 비밀번호만 확인, 목록은 건드리지 않음
     if (action === 'verify') {
       try {
         const list = await kvGet(STORAGE_KEY);
@@ -115,7 +114,12 @@ export default async function handler(req, res) {
 
     try {
       await kvSet(STORAGE_KEY, list);
-      return res.status(200).json({ ok: true, list });
+      // 저장 직후 다시 읽어서 실제로 반영됐는지 검증
+      const verify = await kvGet(STORAGE_KEY);
+      if (!Array.isArray(verify)) {
+        return res.status(500).json({ error: '저장은 시도했지만 확인에 실패했습니다.' });
+      }
+      return res.status(200).json({ ok: true, list: verify });
     } catch (err) {
       return res.status(500).json({ error: '목록을 저장하지 못했습니다: ' + err.message });
     }
