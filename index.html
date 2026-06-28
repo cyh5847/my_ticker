@@ -386,19 +386,18 @@ async function fetchCrypto(ticker){
   };
 }
 
-async function fetchStooq(symbol){
-  const url = 'https://stooq.com/q/l/?s=' + symbol + '&f=sd2t2ohlcv&h&e=csv';
-  const res = await fetch(url);
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-  const text = await res.text();
-  const lines = text.trim().split('\n');
-  if(lines.length < 2) throw new Error('데이터 없음');
-  const cols = lines[1].split(',');
-  const close = parseFloat(cols[6]);
-  const open = parseFloat(cols[3]);
-  if(isNaN(close) || close <= 0) throw new Error('종목 없음');
-  const changePct = open > 0 ? ((close - open) / open) * 100 : 0;
-  return { price: close, changePct };
+async function fetchUS(ticker){
+  const res = await fetch('/api/quote?symbol=' + encodeURIComponent(ticker));
+  const data = await res.json();
+  if(!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
+  return { price: data.price, changePct: data.changePct };
+}
+
+async function fetchKR(code){
+  const res = await fetch('/api/quote-kr?code=' + encodeURIComponent(code));
+  const data = await res.json();
+  if(!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
+  return { price: data.price, changePct: data.changePct };
 }
 
 async function fetchOne(market, ticker){
@@ -408,11 +407,11 @@ async function fetchOne(market, ticker){
     if(market === 'crypto'){
       result = await fetchCrypto(ticker);
     } else if(market === 'us'){
-      result = await fetchStooq(ticker.toLowerCase() + '.us');
+      result = await fetchUS(ticker);
     } else if(market === 'kr'){
       let code = ticker.replace(/[^0-9]/g,'');
       if(code.length === 0) code = ticker;
-      result = await fetchStooq(code + '.ks').catch(() => fetchStooq(code + '.kq'));
+      result = await fetchKR(code);
     }
     const prevPrice = priceCache[k] && !priceCache[k].error ? priceCache[k].price : null;
     priceCache[k] = {
