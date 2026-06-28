@@ -244,14 +244,10 @@ async function tryLogin(){
   loginBtn.disabled = true;
   loginBtn.textContent = '확인 중...';
   try{
-    // 실제 인증은 저장 시 서버가 검증하므로, 여기서는 더미 저장 요청으로 비밀번호 유효성만 확인
-    const res = await fetch('/api/watchlist');
-    const data = await res.json();
-    const currentList = data.list || [];
     const verifyRes = await fetch('/api/watchlist', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ password: pw, list: currentList })
+      body: JSON.stringify({ password: pw, action: 'verify' })
     });
     const verifyData = await verifyRes.json();
     if(!verifyRes.ok || verifyData.error){
@@ -261,7 +257,7 @@ async function tryLogin(){
       return;
     }
     password = pw;
-    watchlist = currentList;
+    watchlist = Array.isArray(verifyData.list) ? verifyData.list : [];
     loginBox.style.display = 'none';
     panel.style.display = 'block';
     renderList();
