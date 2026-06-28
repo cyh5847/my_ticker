@@ -62,7 +62,16 @@ const CRYPTO_LIST = [
   { name: '톤코인', en: 'Toncoin', symbol: 'TON', id: 'the-open-network' },
 ];
 
-const BOND_ITEM = { name: '한국 국채 10년물', code: 'KR10Y' };
+const BOND_ITEMS = [
+  { name: '콜금리(1일물)', ticker: 'CALL1D' },
+  { name: '국고채 1년물', ticker: 'KR1Y', years: 1 },
+  { name: '국고채 3년물', ticker: 'KR3Y', years: 3 },
+  { name: '국고채 5년물', ticker: 'KR5Y', years: 5 },
+  { name: '국고채 10년물', ticker: 'KR10Y', years: 10 },
+  { name: '국고채 20년물', ticker: 'KR20Y', years: 20 },
+  { name: '국고채 30년물', ticker: 'KR30Y', years: 30 },
+  { name: '회사채 3년물(AA-)', ticker: 'CORP3Y', years: 3, corp: true },
+];
 
 function searchKrStocks(q) {
   return KR_STOCKS
@@ -79,11 +88,32 @@ function searchCrypto(q) {
     .map(c => ({ market: 'crypto', ticker: c.symbol, label: `${c.name} (${c.symbol})` }));
 }
 
-function searchBond(q) {
-  if (BOND_ITEM.name.includes(q) || '국채'.includes(q) || q.includes('국채') || q.toLowerCase().includes('bond')) {
-    return [{ market: 'bond', ticker: BOND_ITEM.code, label: BOND_ITEM.name }];
+function searchBond(qRaw) {
+  const q = qRaw.replace(/\s+/g, '');
+  const lower = q.toLowerCase();
+  const yearMatch = q.match(/(\d+)\s*년/);
+  const isBondQuery = q.includes('국채') || q.includes('국고채') || q.includes('금리') ||
+    q.includes('회사채') || lower.includes('bond') || lower.includes('rate') || !!yearMatch;
+  if (!isBondQuery) return [];
+
+  if (yearMatch) {
+    const years = parseInt(yearMatch[1], 10);
+    const wantsCorp = q.includes('회사채');
+    const filtered = BOND_ITEMS.filter(b => b.years === years && !!b.corp === wantsCorp);
+    if (filtered.length > 0) {
+      return filtered.map(b => ({ market: 'bond', ticker: b.ticker, label: b.name }));
+    }
   }
-  return [];
+  if (q.includes('콜금리') || q.includes('1일')) {
+    return BOND_ITEMS.filter(b => b.ticker === 'CALL1D')
+      .map(b => ({ market: 'bond', ticker: b.ticker, label: b.name }));
+  }
+  if (q.includes('회사채')) {
+    return BOND_ITEMS.filter(b => b.corp)
+      .map(b => ({ market: 'bond', ticker: b.ticker, label: b.name }));
+  }
+  // 그 외 일반적인 "국채", "금리" 검색 -> 전체 목록을 보여줘서 고를 수 있게 함
+  return BOND_ITEMS.map(b => ({ market: 'bond', ticker: b.ticker, label: b.name }));
 }
 
 async function searchUS(q) {
@@ -109,12 +139,18 @@ export default async function handler(req, res) {
     return res.status(200).json({ results: [] });
   }
 
+  const bondResults = searchBond(q);
+
+  // 국채/금리 관련 검색어로 판단되면, 다른 시장과 섞지 않고 국채 결과만 보여준다 (혼란 방지)
+  if (bondResults.length > 0) {
+    return res.status(200).json({ results: bondResults.slice(0, 15) });
+  }
+
   const [usResults] = await Promise.all([searchUS(q)]);
   const krResults = searchKrStocks(q);
   const cryptoResults = searchCrypto(q);
-  const bondResults = searchBond(q);
 
-  const results = [...bondResults, ...krResults, ...cryptoResults, ...usResults].slice(0, 15);
+  const results = [...krResults, ...cryptoResults, ...usResults].slice(0, 15);
 
   return res.status(200).json({ results });
 }

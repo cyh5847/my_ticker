@@ -278,8 +278,8 @@ async function fetchKR(code){
   return { price: data.price, changePct: data.changePct };
 }
 
-async function fetchBond(){
-  const res = await fetch('/api/bond');
+async function fetchBond(itemTicker){
+  const res = await fetch('/api/bond?item=' + encodeURIComponent(itemTicker));
   const data = await res.json();
   if(!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
   return { price: data.price, changePct: data.changePct };
@@ -292,7 +292,7 @@ async function fetchOne(market, ticker){
     if(market === 'crypto') result = await fetchCrypto(ticker);
     else if(market === 'us') result = await fetchUS(ticker);
     else if(market === 'kr') result = await fetchKR(ticker.replace(/[^0-9]/g,'') || ticker);
-    else if(market === 'bond') result = await fetchBond();
+    else if(market === 'bond') result = await fetchBond(ticker);
 
     const prevPrice = priceCache[k] && !priceCache[k].error ? priceCache[k].price : null;
     priceCache[k] = {
