@@ -81,17 +81,10 @@
   }
 
   .card-top{
-    display:flex; justify-content:space-between; align-items:flex-start;
     margin-bottom:10px;
   }
-  .ticker-info{display:flex; flex-direction:column; gap:2px;}
-  .ticker-symbol{font-size:13px; font-weight:600; color:var(--text-sub); letter-spacing:0.3px; font-family:var(--mono);}
-  .ticker-name{font-size:12px; color:var(--text-dim);}
-  .market-badge{
-    font-size:10px; padding:2px 7px; border-radius:5px;
-    background:var(--border); color:var(--text-dim);
-    font-weight:600; letter-spacing:0.3px;
-  }
+  .ticker-name{font-size:14px; font-weight:600; color:var(--text);}
+  .ticker-sub{font-size:11px; color:var(--text-dim); font-family:var(--mono); margin-top:1px;}
 
   .price-row{
     display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
@@ -159,10 +152,6 @@ const lastUpdateEl = document.getElementById('lastUpdate');
 
 function keyOf(item){ return item.market + ':' + item.ticker; }
 
-function marketLabel(m){
-  return {us:'미국', kr:'한국', crypto:'코인'}[m] || m;
-}
-
 function formatPrice(market, value){
   if(value == null || isNaN(value)) return '-';
   if(market === 'crypto'){
@@ -173,12 +162,20 @@ function formatPrice(market, value){
   if(market === 'kr'){
     return Math.round(value).toLocaleString('ko-KR');
   }
+  if(market === 'bond'){
+    return value.toFixed(3);
+  }
   return value.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
 function currencySymbol(market){
   if(market === 'kr') return '₩';
+  if(market === 'bond') return '';
   return '$';
+}
+
+function priceSuffix(market){
+  return market === 'bond' ? '%' : '';
 }
 
 function render(){
@@ -195,24 +192,16 @@ function render(){
 
     const top = document.createElement('div');
     top.className = 'card-top';
-
-    const info = document.createElement('div');
-    info.className = 'ticker-info';
-    const sym = document.createElement('div');
-    sym.className = 'ticker-symbol';
-    sym.textContent = item.ticker;
     const name = document.createElement('div');
     name.className = 'ticker-name';
-    name.textContent = marketLabel(item.market);
-    info.appendChild(sym);
-    info.appendChild(name);
-
-    const badge = document.createElement('div');
-    badge.className = 'market-badge';
-    badge.textContent = marketLabel(item.market);
-
-    top.appendChild(info);
-    top.appendChild(badge);
+    name.textContent = item.label || item.ticker;
+    top.appendChild(name);
+    if(item.label && item.label !== item.ticker){
+      const sub = document.createElement('div');
+      sub.className = 'ticker-sub';
+      sub.textContent = item.ticker;
+      top.appendChild(sub);
+    }
     card.appendChild(top);
 
     const body = document.createElement('div');
@@ -225,7 +214,7 @@ function render(){
       priceRow.className = 'price-row';
       const priceEl = document.createElement('span');
       priceEl.className = 'price';
-      priceEl.textContent = currencySymbol(item.market) + formatPrice(item.market, cached.price);
+      priceEl.textContent = currencySymbol(item.market) + formatPrice(item.market, cached.price) + priceSuffix(item.market);
 
       const changeEl = document.createElement('span');
       const pct = cached.changePct;
@@ -289,6 +278,13 @@ async function fetchKR(code){
   return { price: data.price, changePct: data.changePct };
 }
 
+async function fetchBond(){
+  const res = await fetch('/api/bond');
+  const data = await res.json();
+  if(!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
+  return { price: data.price, changePct: data.changePct };
+}
+
 async function fetchOne(market, ticker){
   const k = market + ':' + ticker;
   try{
@@ -296,6 +292,7 @@ async function fetchOne(market, ticker){
     if(market === 'crypto') result = await fetchCrypto(ticker);
     else if(market === 'us') result = await fetchUS(ticker);
     else if(market === 'kr') result = await fetchKR(ticker.replace(/[^0-9]/g,'') || ticker);
+    else if(market === 'bond') result = await fetchBond();
 
     const prevPrice = priceCache[k] && !priceCache[k].error ? priceCache[k].price : null;
     priceCache[k] = {

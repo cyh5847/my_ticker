@@ -63,20 +63,32 @@
 
   /* 관리 영역 */
   .panel{display:none;}
-  .add-row{display:flex; gap:8px; margin-bottom:18px;}
-  .add-row select{
-    background:var(--card); border:1px solid var(--border); color:var(--text-sub);
-    font-size:13px; padding:11px 10px; border-radius:10px; outline:none;
+  .search-wrap{position:relative; margin-bottom:18px;}
+  .search-wrap input{
+    width:100%; background:var(--card); border:1px solid var(--border); color:var(--text);
+    font-size:15px; padding:12px 14px; border-radius:10px; outline:none; box-sizing:border-box;
   }
-  .add-row input{
-    flex:1; background:var(--card); border:1px solid var(--border); color:var(--text);
-    font-size:15px; padding:11px 14px; border-radius:10px; outline:none; font-family:var(--mono);
+  .search-wrap input:focus{border-color:var(--accent);}
+  .search-hint{font-size:12px; color:var(--text-dim); margin-top:6px;}
+
+  .suggestions{
+    position:absolute; top:calc(100% + 6px); left:0; right:0;
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    max-height:280px; overflow-y:auto; z-index:20;
+    box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    display:none;
   }
-  .add-row input:focus{border-color:var(--accent);}
-  .add-row button{
-    background:var(--accent); color:#1a1300; border:none;
-    font-size:14px; font-weight:600; padding:11px 18px; border-radius:10px; cursor:pointer; white-space:nowrap;
+  .suggestions.show{display:block;}
+  .suggestion-item{
+    padding:11px 14px; cursor:pointer; font-size:14px;
+    border-bottom:1px solid var(--border);
+    display:flex; justify-content:space-between; align-items:center;
   }
+  .suggestion-item:last-child{border-bottom:none;}
+  .suggestion-item:hover{background:var(--border);}
+  .suggestion-item .s-label{font-weight:500;}
+  .suggestion-item .s-market{font-size:10px; color:var(--text-dim); background:var(--border); padding:2px 6px; border-radius:5px;}
+  .suggestion-empty{padding:14px; font-size:13px; color:var(--text-dim); text-align:center;}
 
   .save-status{font-size:12px; color:var(--text-dim); margin-bottom:14px; min-height:16px;}
   .save-status.error{color:var(--down);}
@@ -88,12 +100,9 @@
     background:var(--card); border:1px solid var(--border); border-radius:10px;
     padding:12px 14px;
   }
-  .row .info{display:flex; align-items:center; gap:10px;}
-  .row .ticker{font-family:var(--mono); font-weight:600;}
-  .row .market{
-    font-size:10px; padding:2px 7px; border-radius:5px;
-    background:var(--border); color:var(--text-dim); font-weight:600;
-  }
+  .row .info{display:flex; flex-direction:column;}
+  .row .ticker-label{font-weight:600; font-size:14px;}
+  .row .ticker-sub{font-family:var(--mono); font-size:11px; color:var(--text-dim); margin-top:2px;}
   .row .remove{
     background:none; border:none; color:var(--text-dim); font-size:13px; cursor:pointer;
     padding:6px 10px; border-radius:6px;
@@ -126,15 +135,11 @@
   </div>
 
   <div class="panel" id="panel">
-    <div class="add-row">
-      <select id="marketSelect">
-        <option value="us">미국</option>
-        <option value="kr">한국</option>
-        <option value="crypto">코인</option>
-      </select>
-      <input type="text" id="tickerInput" placeholder="예: AAPL / 005930 / BTC" autocomplete="off">
-      <button id="addBtn">추가</button>
+    <div class="search-wrap">
+      <input type="text" id="searchInput" placeholder="종목명이나 코드를 입력하세요 (예: 삼성전자, AAPL, 비트코인)" autocomplete="off">
+      <div class="suggestions" id="suggestions"></div>
     </div>
+    <div class="search-hint">한국 주식은 시가총액 상위 종목, 미국 주식과 코인은 실시간 검색, 국채는 "국채"로 검색하세요.</div>
     <div class="save-status" id="saveStatus"></div>
     <div class="list" id="list"></div>
   </div>
@@ -147,6 +152,7 @@
 <script>
 let password = '';
 let watchlist = [];
+let searchTimer = null;
 
 const loginBox = document.getElementById('loginBox');
 const passwordInput = document.getElementById('passwordInput');
@@ -155,27 +161,27 @@ const loginError = document.getElementById('loginError');
 const panel = document.getElementById('panel');
 const list = document.getElementById('list');
 const saveStatus = document.getElementById('saveStatus');
-const marketSelect = document.getElementById('marketSelect');
-const tickerInput = document.getElementById('tickerInput');
-const addBtn = document.getElementById('addBtn');
+const searchInput = document.getElementById('searchInput');
+const suggestionsEl = document.getElementById('suggestions');
 
 function marketLabel(m){
-  return {us:'미국', kr:'한국', crypto:'코인'}[m] || m;
+  return {us:'미국', kr:'한국', crypto:'코인', bond:'국채'}[m] || m;
 }
 
 function renderList(){
   list.innerHTML = '';
   if(watchlist.length === 0){
-    list.innerHTML = '<div class="empty">등록된 종목이 없어요. 위에서 추가해보세요.</div>';
+    list.innerHTML = '<div class="empty">등록된 종목이 없어요. 위에서 검색해서 추가해보세요.</div>';
     return;
   }
   watchlist.forEach((item, idx) => {
     const row = document.createElement('div');
     row.className = 'row';
+    const label = item.label || item.ticker;
     row.innerHTML = `
       <div class="info">
-        <span class="ticker">${item.ticker}</span>
-        <span class="market">${marketLabel(item.market)}</span>
+        <span class="ticker-label">${label}</span>
+        <span class="ticker-sub">${item.ticker} · ${marketLabel(item.market)}</span>
       </div>
       <button class="remove" data-idx="${idx}">삭제</button>
     `;
@@ -191,13 +197,6 @@ function renderList(){
   });
 }
 
-async function loadList(){
-  const res = await fetch('/api/watchlist');
-  const data = await res.json();
-  watchlist = data.list || [];
-  renderList();
-}
-
 async function saveList(){
   saveStatus.textContent = '저장 중...';
   saveStatus.className = 'save-status';
@@ -209,6 +208,7 @@ async function saveList(){
     });
     const data = await res.json();
     if(!res.ok || data.error) throw new Error(data.error || '저장 실패');
+    watchlist = data.list || watchlist;
     saveStatus.textContent = '저장됐어요. 시세판에 바로 반영됩니다.';
     saveStatus.className = 'save-status ok';
   }catch(err){
@@ -217,25 +217,77 @@ async function saveList(){
   }
 }
 
-function addTicker(){
-  const market = marketSelect.value;
-  const ticker = tickerInput.value.trim().toUpperCase();
-  if(!ticker) return;
-  const exists = watchlist.some(w => w.market === market && w.ticker === ticker);
+function addItem(suggestion){
+  const exists = watchlist.some(w => w.market === suggestion.market && w.ticker === suggestion.ticker);
   if(exists){
-    tickerInput.value = '';
+    searchInput.value = '';
+    hideSuggestions();
     return;
   }
-  watchlist.push({ market, ticker });
-  tickerInput.value = '';
+  watchlist.push({ market: suggestion.market, ticker: suggestion.ticker, label: suggestion.label });
+  searchInput.value = '';
+  hideSuggestions();
   renderList();
   saveList();
 }
 
-addBtn.addEventListener('click', addTicker);
-tickerInput.addEventListener('keydown', e => {
-  if(e.key === 'Enter') addTicker();
+function hideSuggestions(){
+  suggestionsEl.classList.remove('show');
+  suggestionsEl.innerHTML = '';
+}
+
+function showSuggestions(results){
+  if(results.length === 0){
+    suggestionsEl.innerHTML = '<div class="suggestion-empty">검색 결과가 없어요</div>';
+  } else {
+    suggestionsEl.innerHTML = results.map((r, i) => `
+      <div class="suggestion-item" data-idx="${i}">
+        <span class="s-label">${r.label}</span>
+        <span class="s-market">${marketLabel(r.market)}</span>
+      </div>
+    `).join('');
+    suggestionsEl.querySelectorAll('.suggestion-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.dataset.idx, 10);
+        addItem(results[idx]);
+      });
+    });
+  }
+  suggestionsEl.classList.add('show');
+}
+
+async function doSearch(q){
+  if(!q || q.trim().length === 0){
+    hideSuggestions();
+    return;
+  }
+  try{
+    const res = await fetch('/api/search?q=' + encodeURIComponent(q));
+    const data = await res.json();
+    showSuggestions(data.results || []);
+  }catch(err){
+    showSuggestions([]);
+  }
+}
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value;
+  searchTimer = setTimeout(() => doSearch(q), 300);
 });
+
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('.search-wrap')){
+    hideSuggestions();
+  }
+});
+
+async function loadList(){
+  const res = await fetch('/api/watchlist');
+  const data = await res.json();
+  watchlist = data.list || [];
+  renderList();
+}
 
 async function tryLogin(){
   const pw = passwordInput.value;
