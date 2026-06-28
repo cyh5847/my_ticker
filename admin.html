@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>관리자 - 관심종목 시세판</title>
+<style>
+  :root{
+    --bg: #0B0E11;
+    --card: #13171C;
+    --border: #1F252D;
+    --text: #E8EAED;
+    --text-sub: #8B92A0;
+    --text-dim: #5B6270;
+    --up: #16C784;
+    --down: #EA3943;
+    --down-bg: rgba(234,57,67,0.12);
+    --accent: #F0B90B;
+    --mono: 'SF Mono', 'JetBrains Mono', 'Consolas', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    min-height:100vh;
+    padding-bottom:40px;
+  }
+  header{
+    border-bottom:1px solid var(--border);
+    padding:16px;
+  }
+  .header-top{
+    display:flex; align-items:center; justify-content:space-between;
+    max-width:720px; margin:0 auto;
+  }
+  .logo{font-size:17px; font-weight:600;}
+  .logo .badge{
+    font-size:11px; background:var(--accent); color:#1a1300;
+    padding:2px 8px; border-radius:6px; margin-left:8px; font-weight:700;
+  }
+
+  main{max-width:720px; margin:0 auto; padding:24px 16px;}
+
+  /* 로그인 영역 */
+  .login-box{
+    max-width:340px; margin:80px auto; text-align:center;
+  }
+  .login-box p{color:var(--text-sub); font-size:13px; margin-bottom:18px;}
+  .login-box input{
+    width:100%;
+    background:var(--card); border:1px solid var(--border); color:var(--text);
+    font-size:15px; padding:12px 14px; border-radius:10px; outline:none;
+    text-align:center; letter-spacing:2px;
+  }
+  .login-box input:focus{border-color:var(--accent);}
+  .login-box button{
+    width:100%; margin-top:10px;
+    background:var(--accent); color:#1a1300; border:none;
+    font-size:14px; font-weight:600; padding:12px; border-radius:10px; cursor:pointer;
+  }
+  .login-error{color:var(--down); font-size:12px; margin-top:10px; min-height:16px;}
+
+  /* 관리 영역 */
+  .panel{display:none;}
+  .add-row{display:flex; gap:8px; margin-bottom:18px;}
+  .add-row select{
+    background:var(--card); border:1px solid var(--border); color:var(--text-sub);
+    font-size:13px; padding:11px 10px; border-radius:10px; outline:none;
+  }
+  .add-row input{
+    flex:1; background:var(--card); border:1px solid var(--border); color:var(--text);
+    font-size:15px; padding:11px 14px; border-radius:10px; outline:none; font-family:var(--mono);
+  }
+  .add-row input:focus{border-color:var(--accent);}
+  .add-row button{
+    background:var(--accent); color:#1a1300; border:none;
+    font-size:14px; font-weight:600; padding:11px 18px; border-radius:10px; cursor:pointer; white-space:nowrap;
+  }
+
+  .save-status{font-size:12px; color:var(--text-dim); margin-bottom:14px; min-height:16px;}
+  .save-status.error{color:var(--down);}
+  .save-status.ok{color:var(--up);}
+
+  .list{display:flex; flex-direction:column; gap:8px;}
+  .row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px;
+  }
+  .row .info{display:flex; align-items:center; gap:10px;}
+  .row .ticker{font-family:var(--mono); font-weight:600;}
+  .row .market{
+    font-size:10px; padding:2px 7px; border-radius:5px;
+    background:var(--border); color:var(--text-dim); font-weight:600;
+  }
+  .row .remove{
+    background:none; border:none; color:var(--text-dim); font-size:13px; cursor:pointer;
+    padding:6px 10px; border-radius:6px;
+  }
+  .row .remove:hover{color:var(--down); background:var(--down-bg);}
+
+  .empty{color:var(--text-dim); font-size:13px; text-align:center; padding:30px 0;}
+
+  footer{
+    max-width:720px; margin:30px auto 0; padding:0 16px;
+    text-align:center; font-size:11px;
+  }
+  footer a{color:var(--text-dim); text-decoration:underline;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="logo">관심종목 시세판 <span class="badge">관리자</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="login-box" id="loginBox">
+    <p>관리자 비밀번호를 입력하세요</p>
+    <input type="password" id="passwordInput" placeholder="••••••" autocomplete="off">
+    <button id="loginBtn">입장</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="add-row">
+      <select id="marketSelect">
+        <option value="us">미국</option>
+        <option value="kr">한국</option>
+        <option value="crypto">코인</option>
+      </select>
+      <input type="text" id="tickerInput" placeholder="예: AAPL / 005930 / BTC" autocomplete="off">
+      <button id="addBtn">추가</button>
+    </div>
+    <div class="save-status" id="saveStatus"></div>
+    <div class="list" id="list"></div>
+  </div>
+</main>
+
+<footer>
+  <a href="/">시세판으로 돌아가기</a>
+</footer>
+
+<script>
+let password = '';
+let watchlist = [];
+
+const loginBox = document.getElementById('loginBox');
+const passwordInput = document.getElementById('passwordInput');
+const loginBtn = document.getElementById('loginBtn');
+const loginError = document.getElementById('loginError');
+const panel = document.getElementById('panel');
+const list = document.getElementById('list');
+const saveStatus = document.getElementById('saveStatus');
+const marketSelect = document.getElementById('marketSelect');
+const tickerInput = document.getElementById('tickerInput');
+const addBtn = document.getElementById('addBtn');
+
+function marketLabel(m){
+  return {us:'미국', kr:'한국', crypto:'코인'}[m] || m;
+}
+
+function renderList(){
+  list.innerHTML = '';
+  if(watchlist.length === 0){
+    list.innerHTML = '<div class="empty">등록된 종목이 없어요. 위에서 추가해보세요.</div>';
+    return;
+  }
+  watchlist.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `
+      <div class="info">
+        <span class="ticker">${item.ticker}</span>
+        <span class="market">${marketLabel(item.market)}</span>
+      </div>
+      <button class="remove" data-idx="${idx}">삭제</button>
+    `;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('.remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      watchlist.splice(idx, 1);
+      renderList();
+      saveList();
+    });
+  });
+}
+
+async function loadList(){
+  const res = await fetch('/api/watchlist');
+  const data = await res.json();
+  watchlist = data.list || [];
+  renderList();
+}
+
+async function saveList(){
+  saveStatus.textContent = '저장 중...';
+  saveStatus.className = 'save-status';
+  try{
+    const res = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ password, list: watchlist })
+    });
+    const data = await res.json();
+    if(!res.ok || data.error) throw new Error(data.error || '저장 실패');
+    saveStatus.textContent = '저장됐어요. 시세판에 바로 반영됩니다.';
+    saveStatus.className = 'save-status ok';
+  }catch(err){
+    saveStatus.textContent = '저장 실패: ' + err.message;
+    saveStatus.className = 'save-status error';
+  }
+}
+
+function addTicker(){
+  const market = marketSelect.value;
+  const ticker = tickerInput.value.trim().toUpperCase();
+  if(!ticker) return;
+  const exists = watchlist.some(w => w.market === market && w.ticker === ticker);
+  if(exists){
+    tickerInput.value = '';
+    return;
+  }
+  watchlist.push({ market, ticker });
+  tickerInput.value = '';
+  renderList();
+  saveList();
+}
+
+addBtn.addEventListener('click', addTicker);
+tickerInput.addEventListener('keydown', e => {
+  if(e.key === 'Enter') addTicker();
+});
+
+async function tryLogin(){
+  const pw = passwordInput.value;
+  if(!pw) return;
+  loginError.textContent = '';
+  loginBtn.disabled = true;
+  loginBtn.textContent = '확인 중...';
+  try{
+    // 실제 인증은 저장 시 서버가 검증하므로, 여기서는 더미 저장 요청으로 비밀번호 유효성만 확인
+    const res = await fetch('/api/watchlist');
+    const data = await res.json();
+    const currentList = data.list || [];
+    const verifyRes = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ password: pw, list: currentList })
+    });
+    const verifyData = await verifyRes.json();
+    if(!verifyRes.ok || verifyData.error){
+      loginError.textContent = verifyData.error || '비밀번호가 올바르지 않습니다.';
+      loginBtn.disabled = false;
+      loginBtn.textContent = '입장';
+      return;
+    }
+    password = pw;
+    watchlist = currentList;
+    loginBox.style.display = 'none';
+    panel.style.display = 'block';
+    renderList();
+  }catch(err){
+    loginError.textContent = '로그인 중 오류가 발생했습니다.';
+    loginBtn.disabled = false;
+    loginBtn.textContent = '입장';
+  }
+}
+
+loginBtn.addEventListener('click', tryLogin);
+passwordInput.addEventListener('keydown', e => {
+  if(e.key === 'Enter') tryLogin();
+});
+</script>
+
+</body>
+</html>

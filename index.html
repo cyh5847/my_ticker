@@ -3,12 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>내 관심종목 시세판</title>
+<title>관심종목 시세판</title>
 <style>
   :root{
     --bg: #0B0E11;
     --card: #13171C;
-    --card-hover: #171C23;
     --border: #1F252D;
     --text: #E8EAED;
     --text-sub: #8B92A0;
@@ -33,11 +32,11 @@
     background:rgba(11,14,17,0.92);
     backdrop-filter:blur(10px);
     border-bottom:1px solid var(--border);
-    padding:16px 16px 12px;
+    padding:16px 16px 14px;
   }
   .header-top{
     display:flex; align-items:center; justify-content:space-between;
-    max-width:920px; margin:0 auto 12px;
+    max-width:920px; margin:0 auto;
   }
   .logo{
     font-size:17px; font-weight:600; letter-spacing:-0.2px;
@@ -45,52 +44,6 @@
   }
   .logo .dot{width:8px; height:8px; border-radius:50%; background:var(--accent); display:inline-block;}
   .last-update{font-size:12px; color:var(--text-dim); font-family:var(--mono);}
-
-  .search-row{
-    max-width:920px; margin:0 auto;
-    display:flex; gap:8px;
-  }
-  .search-row input{
-    flex:1;
-    background:var(--card);
-    border:1px solid var(--border);
-    color:var(--text);
-    font-size:15px;
-    padding:11px 14px;
-    border-radius:10px;
-    outline:none;
-    font-family:var(--mono);
-  }
-  .search-row input::placeholder{color:var(--text-dim); font-family:-apple-system, sans-serif;}
-  .search-row input:focus{border-color:var(--accent);}
-  .search-row select{
-    background:var(--card);
-    border:1px solid var(--border);
-    color:var(--text-sub);
-    font-size:13px;
-    padding:11px 10px;
-    border-radius:10px;
-    outline:none;
-  }
-  .add-btn{
-    background:var(--accent);
-    color:#1a1300;
-    border:none;
-    font-size:14px;
-    font-weight:600;
-    padding:11px 18px;
-    border-radius:10px;
-    cursor:pointer;
-    white-space:nowrap;
-  }
-  .add-btn:active{transform:scale(0.97);}
-
-  .hint-row{
-    max-width:920px; margin:8px auto 0;
-    font-size:12px; color:var(--text-dim);
-    display:flex; gap:14px; flex-wrap:wrap;
-  }
-  .hint-row span{cursor:pointer; text-decoration:underline; text-decoration-color:var(--border);}
 
   main{max-width:920px; margin:0 auto; padding:18px 16px;}
 
@@ -139,12 +92,6 @@
     background:var(--border); color:var(--text-dim);
     font-weight:600; letter-spacing:0.3px;
   }
-  .remove-btn{
-    background:none; border:none; color:var(--text-dim);
-    font-size:18px; cursor:pointer; padding:0 4px;
-    line-height:1;
-  }
-  .remove-btn:hover{color:var(--down);}
 
   .price-row{
     display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
@@ -174,10 +121,10 @@
     max-width:920px; margin:30px auto 0; padding:0 16px;
     text-align:center; font-size:11px; color:var(--text-dim);
   }
+  footer a{color:var(--text-dim); text-decoration:underline;}
 
   @media (max-width:480px){
     .price{font-size:23px;}
-    .header-top{margin-bottom:10px;}
   }
 </style>
 </head>
@@ -185,32 +132,15 @@
 
 <header>
   <div class="header-top">
-    <div class="logo"><span class="dot"></span>내 관심종목</div>
-    <div class="last-update" id="lastUpdate">대기중</div>
-  </div>
-  <div class="search-row">
-    <select id="marketSelect">
-      <option value="us">미국</option>
-      <option value="kr">한국</option>
-      <option value="crypto">코인</option>
-    </select>
-    <input type="text" id="tickerInput" placeholder="예: AAPL / 005930 / BTC" autocomplete="off">
-    <button class="add-btn" id="addBtn">추가</button>
-  </div>
-  <div class="hint-row">
-    <span data-m="us" data-t="AAPL">AAPL</span>
-    <span data-m="us" data-t="TSLA">TSLA</span>
-    <span data-m="us" data-t="NVDA">NVDA</span>
-    <span data-m="kr" data-t="005930">삼성전자</span>
-    <span data-m="crypto" data-t="BTC">BTC</span>
-    <span data-m="crypto" data-t="ETH">ETH</span>
+    <div class="logo"><span class="dot"></span>관심종목 시세판</div>
+    <div class="last-update" id="lastUpdate">불러오는 중</div>
   </div>
 </header>
 
 <main>
-  <div id="emptyState" class="empty-state">
+  <div id="emptyState" class="empty-state" style="display:none;">
     <div class="big">아직 등록된 종목이 없어요</div>
-    <div class="small">위 검색창에 티커를 입력하고 추가해보세요</div>
+    <div class="small">관리자가 종목을 추가하면 여기에 표시됩니다</div>
   </div>
   <div class="grid" id="grid"></div>
 </main>
@@ -220,41 +150,14 @@
 </footer>
 
 <script>
-const STORAGE_KEY = 'watchlist_v1';
-let watchlist = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+let watchlist = [];
 let priceCache = {};
 
 const grid = document.getElementById('grid');
 const emptyState = document.getElementById('emptyState');
-const tickerInput = document.getElementById('tickerInput');
-const marketSelect = document.getElementById('marketSelect');
-const addBtn = document.getElementById('addBtn');
 const lastUpdateEl = document.getElementById('lastUpdate');
 
-function saveList(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
-}
-
-function keyOf(item){
-  return item.market + ':' + item.ticker;
-}
-
-function addTicker(market, rawTicker){
-  const ticker = rawTicker.trim().toUpperCase();
-  if(!ticker) return;
-  const exists = watchlist.some(w => w.market===market && w.ticker===ticker);
-  if(exists) return;
-  watchlist.push({market, ticker});
-  saveList();
-  render();
-  fetchOne(market, ticker);
-}
-
-function removeTicker(market, ticker){
-  watchlist = watchlist.filter(w => !(w.market===market && w.ticker===ticker));
-  saveList();
-  render();
-}
+function keyOf(item){ return item.market + ':' + item.ticker; }
 
 function marketLabel(m){
   return {us:'미국', kr:'한국', crypto:'코인'}[m] || m;
@@ -274,7 +177,6 @@ function formatPrice(market, value){
 }
 
 function currencySymbol(market){
-  if(market === 'us') return '$';
   if(market === 'kr') return '₩';
   return '$';
 }
@@ -305,22 +207,12 @@ function render(){
     info.appendChild(sym);
     info.appendChild(name);
 
-    const right = document.createElement('div');
-    right.style.display = 'flex';
-    right.style.alignItems = 'center';
-    right.style.gap = '8px';
     const badge = document.createElement('div');
     badge.className = 'market-badge';
     badge.textContent = marketLabel(item.market);
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'remove-btn';
-    removeBtn.innerHTML = '&times;';
-    removeBtn.onclick = () => removeTicker(item.market, item.ticker);
-    right.appendChild(badge);
-    right.appendChild(removeBtn);
 
     top.appendChild(info);
-    top.appendChild(right);
+    top.appendChild(badge);
     card.appendChild(top);
 
     const body = document.createElement('div');
@@ -380,10 +272,7 @@ async function fetchCrypto(ticker){
   const data = await res.json();
   const entry = data[id];
   if(!entry) throw new Error('종목 없음');
-  return {
-    price: entry.usd,
-    changePct: entry.usd_24h_change
-  };
+  return { price: entry.usd, changePct: entry.usd_24h_change };
 }
 
 async function fetchUS(ticker){
@@ -404,15 +293,10 @@ async function fetchOne(market, ticker){
   const k = market + ':' + ticker;
   try{
     let result;
-    if(market === 'crypto'){
-      result = await fetchCrypto(ticker);
-    } else if(market === 'us'){
-      result = await fetchUS(ticker);
-    } else if(market === 'kr'){
-      let code = ticker.replace(/[^0-9]/g,'');
-      if(code.length === 0) code = ticker;
-      result = await fetchKR(code);
-    }
+    if(market === 'crypto') result = await fetchCrypto(ticker);
+    else if(market === 'us') result = await fetchUS(ticker);
+    else if(market === 'kr') result = await fetchKR(ticker.replace(/[^0-9]/g,'') || ticker);
+
     const prevPrice = priceCache[k] && !priceCache[k].error ? priceCache[k].price : null;
     priceCache[k] = {
       price: result.price,
@@ -430,32 +314,26 @@ async function fetchOne(market, ticker){
   }
 }
 
-async function fetchAll(){
+async function fetchAllPrices(){
   if(watchlist.length === 0) return;
   await Promise.all(watchlist.map(w => fetchOne(w.market, w.ticker)));
-  lastUpdateEl.textContent = '업데이트 ' + new Date().toLocaleTimeString('ko-KR');
 }
 
-addBtn.onclick = () => {
-  addTicker(marketSelect.value, tickerInput.value);
-  tickerInput.value = '';
-  tickerInput.focus();
-};
-tickerInput.addEventListener('keydown', e => {
-  if(e.key === 'Enter'){
-    addTicker(marketSelect.value, tickerInput.value);
-    tickerInput.value = '';
+async function loadWatchlist(){
+  try{
+    const res = await fetch('/api/watchlist');
+    const data = await res.json();
+    watchlist = data.list || [];
+    render();
+    await fetchAllPrices();
+    lastUpdateEl.textContent = '업데이트 ' + new Date().toLocaleTimeString('ko-KR');
+  }catch(err){
+    lastUpdateEl.textContent = '목록을 불러오지 못했어요';
   }
-});
-document.querySelectorAll('.hint-row span').forEach(span => {
-  span.addEventListener('click', () => {
-    addTicker(span.dataset.m, span.dataset.t);
-  });
-});
+}
 
-render();
-fetchAll();
-setInterval(fetchAll, 15000);
+loadWatchlist();
+setInterval(loadWatchlist, 20000);
 </script>
 
 </body>
